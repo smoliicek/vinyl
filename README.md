@@ -6,15 +6,15 @@ It reads the active media session (built for the Spotify TV app, works with any 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/now-playing.png" alt="Ciao Adios by Anne-Marie playing: a black record with the cover as its label, title, artist and album to the right, over a blurred green backdrop of the cover"></td>
-    <td width="50%"><img src="docs/now-playing-2.png" alt="Meloun XX by Vypsaná Fixa playing, with a warm yellow-brown blurred backdrop"></td>
+    <td width="50%"><img src="docs/now-playing.png" alt="Jigsaw Falling Into Place by Radiohead playing: a black record with the cover as its label, title, artist and album to the right, a yellow wavy progress bar at 1:48 of 4:08, over a blurred backdrop of the cover"></td>
+    <td width="50%"><img src="docs/now-playing-2.png" alt="Duty ale free by Mnaga A Zdorp playing, with a blue blurred backdrop and a blue wavy progress bar at 1:07 of 3:33"></td>
   </tr>
   <tr>
     <td align="center">Now playing</td>
-    <td align="center">The backdrop follows each cover</td>
+    <td align="center">Backdrop and progress color follow each cover</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/long-title.png" alt="A long title: Under Pressure on the first line, the dimmed feat. and remaster suffix on the second, the artist line scrolling"></td>
+    <td width="50%"><img src="docs/long-title.png" alt="A long title: Under Pressure on the first line, the dimmed feat. and remaster suffix on the second, the artist line scrolling, with the progress bar below"></td>
     <td width="50%"><img src="docs/settings.png" alt="Settings screen with the Use as screensaver toggle on, a Start screensaver now item, and both permissions shown as granted"></td>
   </tr>
   <tr>
