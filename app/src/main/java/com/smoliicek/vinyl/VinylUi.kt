@@ -38,7 +38,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
@@ -72,6 +74,7 @@ private const val DRIFT_DP = 10f
 
 private val Ink = Color(0xFFF2EDE6)
 private val InkDim = Color(0xFFF2EDE6).copy(alpha = 0.62f)
+private val InkFaint = Color(0xFFF2EDE6).copy(alpha = 0.4f)
 private val Floor = Color(0xFF070707)
 private val NeutralTint = Color(0xFF2A2420)
 private val LabelPaper = Color(0xFFE9E1D3)
@@ -99,6 +102,9 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 ),
             ),
     ) {
+        Crossfade(targetState = art, animationSpec = tween(1500), label = "backdrop") { backdrop ->
+            if (backdrop != null) ArtBackdrop(backdrop)
+        }
         BurnInDrift(Modifier.fillMaxSize()) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -107,14 +113,14 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                     .padding(horizontal = 64.dp, vertical = 36.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                val disc = minOf(maxHeight * 0.86f, maxWidth * 0.5f)
-                val infoWidth = minOf(maxWidth - disc * 1.16f, 560.dp)
+                val disc = minOf(maxHeight * 0.82f, maxWidth * 0.48f)
+                val infoWidth = minOf(maxWidth - disc * 1.12f, 640.dp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     VinylDisc(
                         nowPlaying = nowPlaying,
                         modifier = Modifier.size(disc),
                     )
-                    Spacer(Modifier.width(disc * 0.16f))
+                    Spacer(Modifier.width(disc * 0.12f))
                     TrackInfo(
                         nowPlaying = nowPlaying,
                         modifier = Modifier.width(infoWidth),
@@ -122,6 +128,27 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+/** The album art filling the screen, heavily blurred and darkened to about 25% brightness. */
+@Composable
+private fun ArtBackdrop(art: Bitmap) {
+    val image = remember(art) { art.asImageBitmap() }
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(60.dp, BlurredEdgeTreatment.Rectangle),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.75f)),
+        )
     }
 }
 
@@ -135,7 +162,11 @@ private fun TrackInfo(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
             )
             return@Column
         }
-        Crossfade(targetState = nowPlaying.title to nowPlaying.artist, animationSpec = tween(800), label = "info") { (title, artist) ->
+        Crossfade(
+            targetState = Triple(nowPlaying.title, nowPlaying.artist, nowPlaying.album),
+            animationSpec = tween(800),
+            label = "info",
+        ) { (title, artist, album) ->
             Column {
                 BasicText(
                     text = title ?: "Unknown track",
@@ -143,19 +174,28 @@ private fun TrackInfo(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(
                         color = Ink,
-                        fontSize = 40.sp,
-                        lineHeight = 46.sp,
+                        fontSize = 60.sp,
+                        lineHeight = 66.sp,
                         fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.3).sp,
+                        letterSpacing = (-0.6).sp,
                     ),
                 )
                 if (artist != null) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     BasicText(
                         text = artist,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(color = InkDim, fontSize = 26.sp, lineHeight = 32.sp),
+                        style = TextStyle(color = InkDim, fontSize = 32.sp, lineHeight = 38.sp),
+                    )
+                }
+                if (album != null) {
+                    Spacer(Modifier.height(10.dp))
+                    BasicText(
+                        text = album,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(color = InkFaint, fontSize = 24.sp, lineHeight = 30.sp),
                     )
                 }
             }
@@ -217,7 +257,7 @@ fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 }
             }
         }
-        // Static part: light sheen and spindle. Not rotating is what sells the spin.
+        // Static part: label shading, sheen, rim and spindle. Not rotating is what sells the spin.
         Sheen(Modifier.fillMaxSize())
     }
 }
@@ -292,7 +332,6 @@ private fun Grooves(modifier: Modifier = Modifier) {
                 gaps.forEach { radius ->
                     drawCircle(Color.Black, radius = radius, style = Stroke(width = r * 0.012f))
                 }
-                drawCircle(Color.White.copy(alpha = 0.08f), radius = r - 1f, style = Stroke(width = 2f))
             }
         },
     ) {}
@@ -302,29 +341,43 @@ private fun Grooves(modifier: Modifier = Modifier) {
 private fun Sheen(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val r = size.minDimension / 2f
-        // Two opposing glints, like a light above-left of the turntable.
-        drawCircle(
-            brush = Brush.sweepGradient(
-                0.00f to Color.Transparent,
-                0.08f to Color.White.copy(alpha = 0.10f),
-                0.16f to Color.Transparent,
-                0.50f to Color.Transparent,
-                0.58f to Color.White.copy(alpha = 0.07f),
-                0.66f to Color.Transparent,
-                1.00f to Color.Transparent,
-                center = center,
-            ),
-            radius = r,
-        )
+        val labelR = r * LABEL_FRACTION
+
+        // Soft inner shadow on the label, darkening towards its edge.
         drawCircle(
             brush = Brush.radialGradient(
-                0f to Color.White.copy(alpha = 0.06f),
-                1f to Color.Transparent,
-                center = center + Offset(-r * 0.35f, -r * 0.4f),
-                radius = r * 0.9f,
+                0.70f to Color.Transparent,
+                1.00f to Color.Black.copy(alpha = 0.38f),
+                center = center,
+                radius = labelR,
             ),
-            radius = r,
+            radius = labelR,
         )
+        // Thin dark ring where the label meets the vinyl.
+        drawCircle(Color(0xFF080808), radius = labelR, style = Stroke(width = 2.dp.toPx()))
+
+        // Bow-tie sheen: two faint highlights at 45° (top-right) and 225° (bottom-left), on the vinyl
+        // only, since the label is matte. sweepGradient runs clockwise from 3 o'clock, so 45° is 0.875.
+        val vinylWidth = r - labelR
+        drawCircle(
+            brush = Brush.sweepGradient(
+                0.000f to Color.Transparent,
+                0.305f to Color.Transparent,
+                0.375f to Color.White.copy(alpha = 0.09f),
+                0.445f to Color.Transparent,
+                0.805f to Color.Transparent,
+                0.875f to Color.White.copy(alpha = 0.11f),
+                0.945f to Color.Transparent,
+                1.000f to Color.Transparent,
+                center = center,
+            ),
+            radius = labelR + vinylWidth / 2f,
+            style = Stroke(width = vinylWidth),
+        )
+        // Rim highlight on the outer edge.
+        val rim = 1.dp.toPx()
+        drawCircle(Color.White.copy(alpha = 0.16f), radius = r - rim / 2f, style = Stroke(width = rim))
+
         // Spindle hole.
         drawCircle(Color(0xFF0B0B0B), radius = r * 0.022f)
         drawCircle(Color.White.copy(alpha = 0.18f), radius = r * 0.022f, style = Stroke(width = 1.5f))
