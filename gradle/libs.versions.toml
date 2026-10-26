@@ -9,11 +9,14 @@ palette = "1.1.0"
 coil = "3.6.3"
 tvMaterial = "1.1.0"
 junit = "4.13.2"
+# The Expressive APIs (LinearWavyProgressIndicator) aren't in the BOM's stable 1.4.0.
+material3 = "1.5.0-beta02"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }

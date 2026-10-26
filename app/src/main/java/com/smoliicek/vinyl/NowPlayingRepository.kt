@@ -29,14 +29,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class NowPlaying(
-    val title: String?,
-    val artist: String?,
-    val album: String?,
-    val art: Bitmap?,
-    val isPlaying: Boolean,
-)
-
 private const val TAG = "VinylDebug"
 
 private val ART_BITMAP_KEYS = listOf(
@@ -193,6 +185,7 @@ class NowPlayingRepository(context: Context) {
         }
         setArtUri(uriArt)
 
+        val playback = chosen.controller.playbackState
         _nowPlaying.value = NowPlaying(
             title = metadata.text(MediaMetadata.METADATA_KEY_TITLE)
                 ?: metadata.text(MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
@@ -201,7 +194,11 @@ class NowPlayingRepository(context: Context) {
                 ?: metadata.text(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE),
             album = metadata.text(MediaMetadata.METADATA_KEY_ALBUM),
             art = bitmapArt ?: artFromUri,
-            isPlaying = chosen.controller.playbackState?.state == PlaybackState.STATE_PLAYING,
+            isPlaying = playback?.state == PlaybackState.STATE_PLAYING,
+            durationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION).takeIf { it > 0 },
+            position = playback?.position ?: 0L,
+            lastPositionUpdateTime = playback?.lastPositionUpdateTime ?: 0L,
+            playbackSpeed = playback?.playbackSpeed ?: 0f,
         )
     }
 

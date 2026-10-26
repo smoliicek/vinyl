@@ -26,7 +26,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
@@ -86,8 +88,9 @@ class MainActivity : ComponentActivity() {
                                 .onPreviewKeyEvent { event ->
                                     when (event.type) {
                                         KeyEventType.KeyDown -> {
-                                            // While hidden, a key press only brings the button back.
-                                            swallowKeyUp = !buttonVisible
+                                            // While hidden, a navigation key only brings the button back.
+                                            // Other keys (play/pause, volume) always pass through.
+                                            swallowKeyUp = !buttonVisible && event.key in NAVIGATION_KEYS
                                             lastKeyPress++
                                             swallowKeyUp
                                         }
@@ -138,6 +141,10 @@ class MainActivity : ComponentActivity() {
 }
 
 private const val BUTTON_HIDE_DELAY_MS = 5_000L
+private val NAVIGATION_KEYS = setOf(
+    Key.DirectionCenter, Key.Enter, Key.NumPadEnter,
+    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
+)
 
 /**
  * Takes focus so a single OK press opens settings, stays faint, and fades out entirely

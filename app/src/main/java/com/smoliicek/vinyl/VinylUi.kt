@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -94,10 +95,16 @@ private val LabelInk = Color(0xFF2B2420)
 @Composable
 fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
     val art = nowPlaying?.art
+    val palette = rememberPalette(art)
     val tint by animateColorAsState(
-        targetValue = rememberDominantColor(art) ?: NeutralTint,
+        targetValue = palette?.let { it.dominantSwatch ?: it.vibrantSwatch }?.rgb?.let(::Color) ?: NeutralTint,
         animationSpec = tween(1500),
         label = "tint",
+    )
+    val accent by animateColorAsState(
+        targetValue = palette?.let(::lightAccent) ?: Color.White.copy(alpha = 0.85f),
+        animationSpec = tween(1500),
+        label = "accent",
     )
 
     BoxWithConstraints(
@@ -139,6 +146,7 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                     Spacer(Modifier.width(gap))
                     TrackInfo(
                         nowPlaying = nowPlaying,
+                        accent = accent,
                         modifier = Modifier.width(infoWidth),
                     )
                 }
@@ -196,7 +204,7 @@ private fun TextScrim(startX: Dp) {
 }
 
 @Composable
-private fun TrackInfo(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
+private fun TrackInfo(nowPlaying: NowPlaying?, accent: Color, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.Center) {
         if (nowPlaying == null) {
             BasicText(
@@ -223,6 +231,14 @@ private fun TrackInfo(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 }
             }
         }
+        // Outside the crossfade: it snaps to the new track instead of fading.
+        SongProgress(
+            nowPlaying = nowPlaying,
+            color = accent,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp),
+        )
     }
 }
 
@@ -517,16 +533,20 @@ private fun BurnInDrift(modifier: Modifier = Modifier, content: @Composable () -
 }
 
 @Composable
-private fun rememberDominantColor(art: Bitmap?): Color? {
-    var color by remember { mutableStateOf<Color?>(null) }
+private fun rememberPalette(art: Bitmap?): Palette? {
+    var palette by remember { mutableStateOf<Palette?>(null) }
     LaunchedEffect(art) {
-        color = art?.let {
-            withContext(Dispatchers.Default) {
-                val palette = Palette.from(it).maximumColorCount(16).generate()
-                val swatch = palette.dominantSwatch ?: palette.vibrantSwatch
-                swatch?.rgb?.let(::Color)
-            }
+        palette = art?.let {
+            withContext(Dispatchers.Default) { Palette.from(it).maximumColorCount(16).generate() }
         }
     }
-    return color
+    return palette
+}
+
+/** A light colour from the art, for the progress bar: a light swatch if there is one, else a lightened one. */
+private fun lightAccent(palette: Palette): Color? {
+    palette.lightVibrantSwatch?.let { return Color(it.rgb) }
+    palette.lightMutedSwatch?.let { return Color(it.rgb) }
+    val base = palette.vibrantSwatch ?: palette.dominantSwatch ?: return null
+    return lerp(Color(base.rgb), Color.White, 0.55f)
 }
