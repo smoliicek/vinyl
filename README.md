@@ -6,12 +6,12 @@ It reads the active media session (built for the Spotify TV app, works with any 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/now-playing.png" alt="Jigsaw Falling Into Place by Radiohead playing: a black record with the cover as its label, title, artist and album to the right, a yellow wavy progress bar at 1:48 of 4:08, over a blurred backdrop of the cover"></td>
-    <td width="50%"><img src="docs/now-playing-2.png" alt="Duty ale free by Mnaga A Zdorp playing, with a blue blurred backdrop and a blue wavy progress bar at 1:07 of 3:33"></td>
+    <td width="50%"><img src="docs/now-playing.png" alt="Iluze by Vypsaná Fixa playing: a black record with the cover as its label, title, artist and album to the right, a pale wavy progress bar at 1:25 of 3:26, over a warm blurred backdrop of the cover"></td>
+    <td width="50%"><img src="docs/now-playing-2.png" alt="Call on Me by Eric Prydz playing: the title on one line and its dimmed - Radio Mix suffix on the next, a yellow wavy progress bar at 1:12 of 2:51"></td>
   </tr>
   <tr>
     <td align="center">Now playing</td>
-    <td align="center">Backdrop and progress color follow each cover</td>
+    <td align="center">Suffixes like “- Radio Mix” are dimmed; colors follow each cover</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/long-title.png" alt="A long title: Under Pressure on the first line, the dimmed feat. and remaster suffix on the second, the artist line scrolling, with the progress bar below"></td>

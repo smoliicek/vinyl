@@ -328,7 +328,9 @@ private fun withDimSuffix(parts: SplitTitle, color: Color): AnnotatedString = bu
     append(parts.main)
     parts.suffix?.let { suffix ->
         withStyle(SpanStyle(color = color.copy(alpha = color.alpha * 0.5f), fontSize = 0.8.em, fontWeight = FontWeight.Normal)) {
-            append(" $suffix")
+            // A non-breaking space keeps a leading "-" with the word after it, so "- Radio Mix"
+            // wraps as a whole instead of leaving the dash dangling at the end of the line.
+            append(" " + suffix.replace(Regex("^([-–—])\\s+"), "$1\u00A0"))
         }
     }
 }
