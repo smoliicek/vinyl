@@ -4,7 +4,24 @@ An Android TV screensaver (DreamService) that shows the currently playing track'
 
 It reads the active media session (built for the Spotify TV app, works with any player that publishes a MediaSession). Sideload only.
 
-![Vinyl playing on Android TV: a spinning black record with the album art as its label, track title and artist beside it](docs/screenshot.png)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/now-playing.png" alt="Ciao Adios by Anne-Marie playing: a black record with the cover as its label, title, artist and album to the right, over a blurred green backdrop of the cover"></td>
+    <td width="50%"><img src="docs/now-playing-2.png" alt="Meloun XX by Vypsaná Fixa playing, with a warm yellow-brown blurred backdrop"></td>
+  </tr>
+  <tr>
+    <td align="center">Now playing</td>
+    <td align="center">The backdrop follows each cover</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/long-title.png" alt="A long title: Under Pressure on the first line, the dimmed feat. and remaster suffix on the second, the artist line scrolling"></td>
+    <td width="50%"><img src="docs/settings.png" alt="Settings screen with the Use as screensaver toggle on, a Start screensaver now item, and both permissions shown as granted"></td>
+  </tr>
+  <tr>
+    <td align="center">Long titles: dimmed suffix, scrolling artist (debug text preview)</td>
+    <td align="center">Settings</td>
+  </tr>
+</table>
 
 ## Build
 
