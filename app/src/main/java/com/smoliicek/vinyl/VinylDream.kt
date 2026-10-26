@@ -44,6 +44,8 @@ class VinylDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner, View
         super.onAttachedToWindow()
         isFullscreen = true
         isInteractive = false
+        // Compose covers the whole window, so a window background would only be overdraw.
+        window.setBackgroundDrawable(null)
 
         window.decorView.let { decor ->
             decor.setViewTreeLifecycleOwner(this)

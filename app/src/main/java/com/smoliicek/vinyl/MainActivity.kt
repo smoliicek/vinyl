@@ -22,7 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -52,6 +53,8 @@ class MainActivity : ComponentActivity() {
         repository = NowPlayingRepository(this)
         setup = SystemSetup(this)
         readDebugText(intent)
+        // Compose covers the whole window, so the theme's black background would only be overdraw.
+        window.setBackgroundDrawable(null)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -169,7 +172,11 @@ private fun SettingsButton(visible: Boolean, onClick: () -> Unit, modifier: Modi
         modifier = modifier
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
-            .alpha(alpha),
+            // ModulateAlpha applies alpha per draw call; plain .alpha() would render the button offscreen.
+            .graphicsLayer {
+                this.alpha = alpha
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            },
     ) {
         Text("Settings")
     }

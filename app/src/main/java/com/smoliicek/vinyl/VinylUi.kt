@@ -76,9 +76,15 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.Stable
+import androidx.compose.animation.core.Animatable
 
 private const val SECONDS_PER_TURN = 3.6f // half of 33⅓ RPM; the real speed read as too fast on screen
-private const val LABEL_FRACTION = 0.4f
 private const val DRIFT_DP = 10f
 private val SAFE_HORIZONTAL = 64.dp // TV overscan-safe margins
 private val SAFE_VERTICAL = 36.dp
@@ -89,14 +95,12 @@ private val InkDim = Color(0xFFF2EDE6).copy(alpha = 0.62f)
 private val InkFaint = Color(0xFFF2EDE6).copy(alpha = 0.4f)
 private val Floor = Color(0xFF070707)
 private val NeutralTint = Color(0xFF2A2420)
-private val LabelPaper = Color(0xFFE9E1D3)
-private val LabelInk = Color(0xFF2B2420)
 
 @Composable
 fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
     val art = nowPlaying?.art
     val palette = rememberPalette(art)
-    val tint by animateColorAsState(
+    val tint = animateColorAsState(
         targetValue = palette?.let { it.dominantSwatch ?: it.vibrantSwatch }?.rgb?.let(::Color) ?: NeutralTint,
         animationSpec = tween(1500),
         label = "tint",
@@ -107,19 +111,7 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         label = "accent",
     )
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    0f to lerp(tint, Floor, 0.55f),
-                    0.65f to lerp(tint, Floor, 0.88f),
-                    1f to Floor,
-                    start = Offset.Zero,
-                    end = Offset.Infinite,
-                ),
-            ),
-    ) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         // Layout is worked out here, not by the Row, so the backdrop and scrim can line up with the disc.
         val innerWidth = maxWidth - SAFE_HORIZONTAL * 2
         val disc = minOf((maxHeight - SAFE_VERTICAL * 2) * 0.82f, innerWidth * 0.48f)
@@ -127,10 +119,7 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         val infoWidth = minOf(innerWidth - disc - gap, 640.dp)
         val discCenterX = SAFE_HORIZONTAL + (innerWidth - (disc + gap + infoWidth)) / 2 + disc / 2
 
-        Crossfade(targetState = art, animationSpec = tween(1500), label = "backdrop") { backdrop ->
-            if (backdrop != null) ArtBackdrop(backdrop, centerX = discCenterX)
-        }
-        TextScrim(startX = discCenterX + disc / 2)
+        Background(art = art, tint = tint, centerX = discCenterX, scrimStartX = discCenterX + disc / 2)
         BurnInDrift(Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -156,51 +145,75 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
 }
 
 /**
- * The album art, centred horizontally under the disc and scaled to cover the whole screen,
- * heavily blurred and darkened to about 25% brightness.
+ * The art backdrop (centred under the disc, covering the screen) with the text scrim, baked once per
+ * track into one opaque half-resolution image, so each frame is a single blit with no blending.
+ * Without art it falls back to the tinted gradient plus scrim, drawn live.
  */
 @Composable
-private fun ArtBackdrop(art: Bitmap, centerX: Dp) {
-    val image = remember(art) { art.asImageBitmap() }
-    Box(Modifier.fillMaxSize()) {
-        Canvas(
-            Modifier
-                .fillMaxSize()
-                .blur(60.dp, BlurredEdgeTreatment.Rectangle),
-        ) {
-            val cx = centerX.toPx()
-            // Square, big enough to reach the farther screen edge from cx and the full height.
-            val side = maxOf(2 * maxOf(cx, size.width - cx), size.height)
-            val srcSide = minOf(image.width, image.height)
-            drawImage(
-                image = image,
-                srcOffset = IntOffset((image.width - srcSide) / 2, (image.height - srcSide) / 2),
-                srcSize = IntSize(srcSide, srcSide),
-                dstOffset = IntOffset((cx - side / 2).roundToInt(), ((size.height - side) / 2).roundToInt()),
-                dstSize = IntSize(side.roundToInt(), side.roundToInt()),
-            )
+private fun Background(art: Bitmap?, tint: State<Color>, centerX: Dp, scrimStartX: Dp) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val cx = with(density) { centerX.toPx() }
+        val scrimX = with(density) { scrimStartX.toPx() }
+        val baked by produceState<ImageBitmap?>(null, art, width, height, cx, scrimX) {
+            value = art?.let { withContext(Dispatchers.Default) { bakeBackground(it, width, height, cx, scrimX) } }
         }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.75f)),
-        )
+        val fade = rememberImageFade(baked, durationMillis = 1500)
+        Canvas(Modifier.fillMaxSize()) {
+            val t = fade.fraction
+            val current = fade.current
+            val previous = fade.previous
+            if (current == null || t < 1f) {
+                drawRect(
+                    Brush.linearGradient(
+                        0f to lerp(tint.value, Floor, 0.55f),
+                        0.65f to lerp(tint.value, Floor, 0.88f),
+                        1f to Floor,
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height),
+                    ),
+                )
+                drawScrim(scrimX)
+            }
+            if (previous != null) drawFullScreen(previous, alpha = if (current != null) 1f else 1f - t)
+            if (current != null) drawFullScreen(current, alpha = t)
+        }
     }
 }
 
-/** Darkens towards the right so the text reads the same over any backdrop. */
+private fun DrawScope.drawFullScreen(image: ImageBitmap, alpha: Float) {
+    if (alpha <= 0f) return
+    drawImage(
+        image = image,
+        dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+        alpha = alpha,
+        filterQuality = FilterQuality.Low, // bilinear; the content is all soft
+    )
+}
+
+/** Fades from the previous image to [target] by drawing both with alpha, instead of using alpha layers. */
+@Stable
+private class ImageFade(initial: ImageBitmap?) {
+    var previous by mutableStateOf<ImageBitmap?>(null)
+    var current by mutableStateOf(initial)
+    val progress = Animatable(1f)
+    val fraction: Float get() = progress.value
+}
+
 @Composable
-private fun TextScrim(startX: Dp) {
-    Canvas(Modifier.fillMaxSize()) {
-        drawRect(
-            Brush.horizontalGradient(
-                0f to Color.Transparent,
-                1f to Color.Black.copy(alpha = 0.4f),
-                startX = startX.toPx(),
-                endX = size.width,
-            ),
-        )
+private fun rememberImageFade(target: ImageBitmap?, durationMillis: Int): ImageFade {
+    val fade = remember { ImageFade(target) }
+    LaunchedEffect(target) {
+        if (target === fade.current) return@LaunchedEffect
+        fade.previous = fade.current
+        fade.current = target
+        fade.progress.snapTo(0f)
+        fade.progress.animateTo(1f, tween(durationMillis))
+        fade.previous = null
     }
+    return fade
 }
 
 @Composable
@@ -328,7 +341,7 @@ fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         animationSpec = tween(1000, easing = FastOutSlowInEasing),
         label = "speed",
     )
-    val dim by animateFloatAsState(
+    val dim = animateFloatAsState(
         targetValue = if (nowPlaying == null) 0.4f else 1f,
         animationSpec = tween(1200),
         label = "dim",
@@ -353,151 +366,36 @@ fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         }
     }
 
-    Box(modifier = modifier.alpha(dim), contentAlignment = Alignment.Center) {
-        // Rotating part: grooves + label.
-        Box(
-            modifier = Modifier
+    val label = when {
+        nowPlaying == null -> LabelContent.Empty
+        nowPlaying.art != null -> LabelContent.Art(nowPlaying.art)
+        else -> LabelContent.Text(nowPlaying.album ?: nowPlaying.title)
+    }
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    BoxWithConstraints(modifier) {
+        val sizePx = constraints.maxWidth
+        // The record is drawn once per track and size; frames only rotate the finished image.
+        val discImage by produceState<ImageBitmap?>(null, sizePx, label) {
+            value = withContext(Dispatchers.Default) { renderDisc(sizePx, label, textMeasurer, density) }
+        }
+        val sheen = remember(sizePx, density) { renderSheen(sizePx, density) }
+        val fade = rememberImageFade(discImage, durationMillis = 900)
+
+        // Only this layer's rotation changes per frame; angle is read inside graphicsLayer, not in composition.
+        Canvas(
+            Modifier
                 .fillMaxSize()
                 .graphicsLayer { rotationZ = angle },
-            contentAlignment = Alignment.Center,
         ) {
-            Grooves(Modifier.fillMaxSize())
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize(LABEL_FRACTION)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                val labelSize = maxWidth
-                Crossfade(targetState = nowPlaying?.art, animationSpec = tween(900), label = "label") { art ->
-                    Label(art = art, nowPlaying = nowPlaying, size = labelSize)
-                }
-            }
+            val t = fade.fraction
+            fade.previous?.let { drawImage(it, alpha = dim.value * if (fade.current != null) 1f else 1f - t) }
+            fade.current?.let { drawImage(it, alpha = dim.value * t) }
         }
-        // Static part: label shading, sheen, rim and spindle. Not rotating is what sells the spin.
-        Sheen(Modifier.fillMaxSize())
-    }
-}
-
-@Composable
-private fun Label(art: Bitmap?, nowPlaying: NowPlaying?, size: Dp) {
-    if (art != null) {
-        val image = remember(art) { art.asImageBitmap() }
-        Image(
-            bitmap = image,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-    val text = nowPlaying?.album ?: nowPlaying?.title
-    val fontSize = with(LocalDensity.current) { (size * 0.075f).toSp() }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(if (nowPlaying == null) Color(0xFF3A3530) else LabelPaper),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (text != null) {
-            BasicText(
-                text = text.uppercase(),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(
-                    color = LabelInk,
-                    fontSize = fontSize,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp,
-                    textAlign = TextAlign.Center,
-                ),
-                // Keep text clear of the spindle hole.
-                modifier = Modifier
-                    .padding(horizontal = size * 0.14f)
-                    .padding(bottom = size * 0.3f),
-            )
+        // Static sheen on top. Not rotating is what sells the spin.
+        Canvas(Modifier.fillMaxSize()) {
+            drawImage(sheen, alpha = dim.value)
         }
-    }
-}
-
-@Composable
-private fun Grooves(modifier: Modifier = Modifier) {
-    Canvas(
-        modifier = modifier.drawWithCache {
-            val r = size.minDimension / 2f
-            val rng = Random(33)
-            val rings = buildList {
-                var radius = r * (LABEL_FRACTION / 2f + 0.03f)
-                while (radius < r * 0.965f) {
-                    add(radius to (0.025f + rng.nextFloat() * 0.06f))
-                    radius += r * (0.006f + rng.nextFloat() * 0.006f)
-                }
-            }
-            // A couple of wider "track gap" rings, like a real LP.
-            val gaps = listOf(0.52f, 0.68f, 0.83f).map { it * r }
-            val body = Brush.radialGradient(
-                0f to Color(0xFF1A1A1A),
-                0.45f to Color(0xFF0E0E0E),
-                1f to Color(0xFF050505),
-                radius = r,
-            )
-            onDrawBehind {
-                drawCircle(body, radius = r)
-                rings.forEach { (radius, a) ->
-                    drawCircle(Color.White.copy(alpha = a), radius = radius, style = Stroke(width = 1f))
-                }
-                gaps.forEach { radius ->
-                    drawCircle(Color.Black, radius = radius, style = Stroke(width = r * 0.012f))
-                }
-            }
-        },
-    ) {}
-}
-
-@Composable
-private fun Sheen(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val r = size.minDimension / 2f
-        val labelR = r * LABEL_FRACTION
-
-        // Soft inner shadow on the label, darkening towards its edge.
-        drawCircle(
-            brush = Brush.radialGradient(
-                0.70f to Color.Transparent,
-                1.00f to Color.Black.copy(alpha = 0.38f),
-                center = center,
-                radius = labelR,
-            ),
-            radius = labelR,
-        )
-        // Thin dark ring where the label meets the vinyl.
-        drawCircle(Color(0xFF080808), radius = labelR, style = Stroke(width = 2.dp.toPx()))
-
-        // Bow-tie sheen: two faint highlights at 45° (top-right) and 225° (bottom-left), on the vinyl
-        // only, since the label is matte. sweepGradient runs clockwise from 3 o'clock, so 45° is 0.875.
-        val vinylWidth = r - labelR
-        drawCircle(
-            brush = Brush.sweepGradient(
-                0.000f to Color.Transparent,
-                0.305f to Color.Transparent,
-                0.375f to Color.White.copy(alpha = 0.09f),
-                0.445f to Color.Transparent,
-                0.805f to Color.Transparent,
-                0.875f to Color.White.copy(alpha = 0.11f),
-                0.945f to Color.Transparent,
-                1.000f to Color.Transparent,
-                center = center,
-            ),
-            radius = labelR + vinylWidth / 2f,
-            style = Stroke(width = vinylWidth),
-        )
-        // Rim highlight on the outer edge.
-        val rim = 1.dp.toPx()
-        drawCircle(Color.White.copy(alpha = 0.16f), radius = r - rim / 2f, style = Stroke(width = rim))
-
-        // Spindle hole.
-        drawCircle(Color(0xFF0B0B0B), radius = r * 0.022f)
-        drawCircle(Color.White.copy(alpha = 0.18f), radius = r * 0.022f, style = Stroke(width = 1.5f))
     }
 }
 
