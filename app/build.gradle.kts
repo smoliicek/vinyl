@@ -43,4 +43,6 @@ dependencies {
     implementation(libs.palette)
     implementation(libs.coil)
     implementation(libs.tv.material)
+
+    testImplementation(libs.junit)
 }

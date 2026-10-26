@@ -1,5 +1,7 @@
 package com.smoliicek.vinyl
 
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -40,17 +42,24 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: NowPlayingRepository
     private lateinit var setup: SystemSetup
 
+    // Debug builds only: lets `adb shell am start ... --es debug_title "…"` try out long text on the real art.
+    private var debugText by mutableStateOf<Triple<String?, String?, String?>?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repository = NowPlayingRepository(this)
         setup = SystemSetup(this)
+        readDebugText(intent)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 BackHandler(enabled = showSettings) { showSettings = false }
 
                 val permissionMissing by repository.permissionMissing.collectAsStateWithLifecycle()
-                val nowPlaying by repository.nowPlaying.collectAsStateWithLifecycle()
+                val livePlaying by repository.nowPlaying.collectAsStateWithLifecycle()
+                val nowPlaying = livePlaying?.let { live ->
+                    debugText?.let { (title, artist, album) -> live.copy(title = title, artist = artist, album = album) } ?: live
+                }
 
                 when {
                     showSettings -> SettingsScreen(
@@ -100,6 +109,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readDebugText(intent)
+    }
+
+    private fun readDebugText(intent: Intent) {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        if (!intent.hasExtra("debug_title")) return
+        debugText = Triple(
+            intent.getStringExtra("debug_title"),
+            intent.getStringExtra("debug_artist"),
+            intent.getStringExtra("debug_album"),
+        )
     }
 
     override fun onStart() {

@@ -1,19 +1,16 @@
 package com.smoliicek.vinyl
 
 import android.graphics.Bitmap
+import android.os.SystemClock
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -51,26 +48,40 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.palette.graphics.Palette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
 private const val SECONDS_PER_TURN = 3.6f // half of 33⅓ RPM; the real speed read as too fast on screen
 private const val LABEL_FRACTION = 0.4f
 private const val DRIFT_DP = 10f
+private val SAFE_HORIZONTAL = 64.dp // TV overscan-safe margins
+private val SAFE_VERTICAL = 36.dp
+private val TITLE_SIZES = (60 downTo 44 step 2).map { it.sp }
 
 private val Ink = Color(0xFFF2EDE6)
 private val InkDim = Color(0xFFF2EDE6).copy(alpha = 0.62f)
@@ -89,7 +100,7 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         label = "tint",
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -102,25 +113,30 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 ),
             ),
     ) {
+        // Layout is worked out here, not by the Row, so the backdrop and scrim can line up with the disc.
+        val innerWidth = maxWidth - SAFE_HORIZONTAL * 2
+        val disc = minOf((maxHeight - SAFE_VERTICAL * 2) * 0.82f, innerWidth * 0.48f)
+        val gap = disc * 0.12f
+        val infoWidth = minOf(innerWidth - disc - gap, 640.dp)
+        val discCenterX = SAFE_HORIZONTAL + (innerWidth - (disc + gap + infoWidth)) / 2 + disc / 2
+
         Crossfade(targetState = art, animationSpec = tween(1500), label = "backdrop") { backdrop ->
-            if (backdrop != null) ArtBackdrop(backdrop)
+            if (backdrop != null) ArtBackdrop(backdrop, centerX = discCenterX)
         }
+        TextScrim(startX = discCenterX + disc / 2)
         BurnInDrift(Modifier.fillMaxSize()) {
-            BoxWithConstraints(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // TV overscan-safe margins
-                    .padding(horizontal = 64.dp, vertical = 36.dp),
+                    .padding(horizontal = SAFE_HORIZONTAL, vertical = SAFE_VERTICAL),
                 contentAlignment = Alignment.Center,
             ) {
-                val disc = minOf(maxHeight * 0.82f, maxWidth * 0.48f)
-                val infoWidth = minOf(maxWidth - disc * 1.12f, 640.dp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     VinylDisc(
                         nowPlaying = nowPlaying,
                         modifier = Modifier.size(disc),
                     )
-                    Spacer(Modifier.width(disc * 0.12f))
+                    Spacer(Modifier.width(gap))
                     TrackInfo(
                         nowPlaying = nowPlaying,
                         modifier = Modifier.width(infoWidth),
@@ -131,23 +147,50 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
     }
 }
 
-/** The album art filling the screen, heavily blurred and darkened to about 25% brightness. */
+/**
+ * The album art, centred horizontally under the disc and scaled to cover the whole screen,
+ * heavily blurred and darkened to about 25% brightness.
+ */
 @Composable
-private fun ArtBackdrop(art: Bitmap) {
+private fun ArtBackdrop(art: Bitmap, centerX: Dp) {
     val image = remember(art) { art.asImageBitmap() }
     Box(Modifier.fillMaxSize()) {
-        Image(
-            bitmap = image,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
+        Canvas(
+            Modifier
                 .fillMaxSize()
                 .blur(60.dp, BlurredEdgeTreatment.Rectangle),
-        )
+        ) {
+            val cx = centerX.toPx()
+            // Square, big enough to reach the farther screen edge from cx and the full height.
+            val side = maxOf(2 * maxOf(cx, size.width - cx), size.height)
+            val srcSide = minOf(image.width, image.height)
+            drawImage(
+                image = image,
+                srcOffset = IntOffset((image.width - srcSide) / 2, (image.height - srcSide) / 2),
+                srcSize = IntSize(srcSide, srcSide),
+                dstOffset = IntOffset((cx - side / 2).roundToInt(), ((size.height - side) / 2).roundToInt()),
+                dstSize = IntSize(side.roundToInt(), side.roundToInt()),
+            )
+        }
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.75f)),
+        )
+    }
+}
+
+/** Darkens towards the right so the text reads the same over any backdrop. */
+@Composable
+private fun TextScrim(startX: Dp) {
+    Canvas(Modifier.fillMaxSize()) {
+        drawRect(
+            Brush.horizontalGradient(
+                0f to Color.Transparent,
+                1f to Color.Black.copy(alpha = 0.4f),
+                startX = startX.toPx(),
+                endX = size.width,
+            ),
         )
     }
 }
@@ -168,37 +211,95 @@ private fun TrackInfo(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
             label = "info",
         ) { (title, artist, album) ->
             Column {
-                BasicText(
-                    text = title ?: "Unknown track",
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(
-                        color = Ink,
-                        fontSize = 60.sp,
-                        lineHeight = 66.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.6).sp,
-                    ),
-                )
+                Title(title ?: "Unknown track")
                 if (artist != null) {
                     Spacer(Modifier.height(16.dp))
-                    BasicText(
-                        text = artist,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(color = InkDim, fontSize = 32.sp, lineHeight = 38.sp),
-                    )
+                    MarqueeLine(AnnotatedString(artist), TextStyle(color = InkDim, fontSize = 32.sp))
                 }
                 if (album != null) {
                     Spacer(Modifier.height(10.dp))
-                    BasicText(
-                        text = album,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(color = InkFaint, fontSize = 24.sp, lineHeight = 30.sp),
-                    )
+                    val albumStyle = TextStyle(color = InkFaint, fontSize = 24.sp)
+                    MarqueeLine(withDimSuffix(splitTitle(album), albumStyle.color), albumStyle)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Picks the largest size from 60 down to 44sp at which the main title (without its suffix) fits on one line.
+ * Below that it stays at 44sp and wraps to two lines. The suffix follows on the same line and is what gets
+ * cut short: we keep as much of it as fits with an ellipsis, so the main title is only ever ellipsized
+ * when it doesn't fit in two lines by itself.
+ */
+@Composable
+private fun Title(text: String) {
+    val parts = remember(text) { splitTitle(text) }
+    val baseStyle = TextStyle(color = Ink, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp, lineHeight = 1.12.em)
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints {
+        val widthOnly = Constraints(maxWidth = constraints.maxWidth)
+        val (style, shown) = remember(parts, widthOnly) {
+            val fontSize = TITLE_SIZES.firstOrNull { size ->
+                measurer.measure(parts.main, baseStyle.copy(fontSize = size), maxLines = 1, softWrap = false)
+                    .size.width <= widthOnly.maxWidth
+            } ?: TITLE_SIZES.last()
+            val style = baseStyle.copy(fontSize = fontSize)
+            fun fits(candidate: SplitTitle) =
+                !measurer.measure(withDimSuffix(candidate, style.color), style, maxLines = 2, constraints = widthOnly)
+                    .hasVisualOverflow
+            style to fitSuffix(parts, ::fits)
+        }
+        BasicText(
+            text = withDimSuffix(shown, style.color),
+            style = style,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The longest prefix of the suffix (ellipsized) that still [fits]; no suffix at all if none does. */
+private fun fitSuffix(parts: SplitTitle, fits: (SplitTitle) -> Boolean): SplitTitle {
+    val suffix = parts.suffix ?: return parts
+    if (fits(parts)) return parts
+    var low = 0
+    var high = suffix.length - 1
+    var best: SplitTitle? = null
+    while (low <= high) {
+        val mid = (low + high) / 2
+        val candidate = parts.copy(suffix = suffix.take(mid).trimEnd() + "…")
+        if (fits(candidate)) {
+            best = candidate
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    return best?.takeIf { it.suffix != "…" } ?: parts.copy(suffix = null)
+}
+
+/** One fixed-size line that scrolls slowly, with a pause before each pass, only when it doesn't fit. */
+@Composable
+private fun MarqueeLine(text: AnnotatedString, style: TextStyle) {
+    BasicText(
+        text = text,
+        style = style,
+        maxLines = 1,
+        modifier = Modifier.basicMarquee(
+            iterations = Int.MAX_VALUE,
+            initialDelayMillis = 2_000,
+            repeatDelayMillis = 2_000,
+            velocity = 24.dp,
+        ),
+    )
+}
+
+private fun withDimSuffix(parts: SplitTitle, color: Color): AnnotatedString = buildAnnotatedString {
+    append(parts.main)
+    parts.suffix?.let { suffix ->
+        withStyle(SpanStyle(color = color.copy(alpha = color.alpha * 0.5f), fontSize = 0.8.em, fontWeight = FontWeight.Normal)) {
+            append(" $suffix")
         }
     }
 }
@@ -384,26 +485,31 @@ private fun Sheen(modifier: Modifier = Modifier) {
     }
 }
 
-/** Slow Lissajous drift of a few dp over several minutes, to avoid burn-in. */
+/**
+ * Slow Lissajous drift of a few dp over several minutes, to avoid burn-in.
+ * It moves in whole-pixel steps checked once a second: a per-frame animation here would redraw the
+ * whole screen at 60 fps even when nothing else on it changes.
+ */
 @Composable
 private fun BurnInDrift(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "drift")
-    val phaseX by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(7 * 60_000, easing = LinearEasing), RepeatMode.Restart),
-        label = "driftX",
-    )
-    val phaseY by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(11 * 60_000, easing = LinearEasing), RepeatMode.Restart),
-        label = "driftY",
-    )
+    val amplitude = with(LocalDensity.current) { DRIFT_DP.dp.toPx() }
+    var offset by remember { mutableStateOf(IntOffset.Zero) }
+    LaunchedEffect(amplitude) {
+        val start = SystemClock.uptimeMillis()
+        while (true) {
+            val minutes = (SystemClock.uptimeMillis() - start) / 60_000.0
+            // Only changes (and so only redraws) when it lands on a different pixel.
+            offset = IntOffset(
+                (sin(2 * PI * minutes / 7) * amplitude).roundToInt(),
+                (sin(2 * PI * minutes / 11) * amplitude).roundToInt(),
+            )
+            delay(1_000)
+        }
+    }
     Box(
         modifier = modifier.graphicsLayer {
-            translationX = sin(phaseX) * DRIFT_DP.dp.toPx()
-            translationY = sin(phaseY) * DRIFT_DP.dp.toPx()
+            translationX = offset.x.toFloat()
+            translationY = offset.y.toFloat()
         },
     ) {
         content()

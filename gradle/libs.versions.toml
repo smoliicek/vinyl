@@ -8,6 +8,7 @@ savedstate = "1.5.0"
 palette = "1.1.0"
 coil = "3.6.3"
 tvMaterial = "1.1.0"
+junit = "4.13.2"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -21,6 +22,7 @@ savedstate = { module = "androidx.savedstate:savedstate-ktx", version.ref = "sav
 palette = { module = "androidx.palette:palette-ktx", version.ref = "palette" }
 coil = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 tv-material = { module = "androidx.tv:tv-material", version.ref = "tvMaterial" }
+junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
