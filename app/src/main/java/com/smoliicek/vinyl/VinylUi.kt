@@ -72,6 +72,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -98,7 +99,15 @@ private val NeutralTint = Color(0xFF2A2420)
 
 @Composable
 fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
-    val art = nowPlaying?.art
+    val idle by rememberIdle(nowPlaying)
+    val time by rememberMinuteClock(active = idle)
+    val trackTitle = nowPlaying?.title
+    val trackArtist = nowPlaying?.artist
+    LaunchedEffect(trackTitle, trackArtist) {
+        if (trackTitle != null || trackArtist != null) LastPlayed.track = trackTitle to trackArtist
+    }
+
+    val art = nowPlaying?.art.takeUnless { idle }
     val palette = rememberPalette(art)
     val tint = animateColorAsState(
         targetValue = palette?.let { it.dominantSwatch ?: it.vibrantSwatch }?.rgb?.let(::Color) ?: NeutralTint,
@@ -115,7 +124,7 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         // Layout is worked out here, not by the Row, so the backdrop and scrim can line up with the disc.
         val innerWidth = maxWidth - SAFE_HORIZONTAL * 2
         val disc = minOf((maxHeight - SAFE_VERTICAL * 2) * 0.82f, innerWidth * 0.48f)
-        val gap = disc * 0.12f
+        val gap = disc * 0.17f // room for the tonearm's pivot
         val infoWidth = minOf(innerWidth - disc - gap, 640.dp)
         val discCenterX = SAFE_HORIZONTAL + (innerWidth - (disc + gap + infoWidth)) / 2 + disc / 2
 
@@ -130,14 +139,22 @@ fun VinylScreen(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     VinylDisc(
                         nowPlaying = nowPlaying,
+                        idle = idle,
+                        time = time,
                         modifier = Modifier.size(disc),
                     )
                     Spacer(Modifier.width(gap))
-                    TrackInfo(
-                        nowPlaying = nowPlaying,
-                        accent = accent,
-                        modifier = Modifier.width(infoWidth),
-                    )
+                    Crossfade(targetState = idle, animationSpec = tween(800), label = "idleInfo") { isIdle ->
+                        if (isIdle) {
+                            IdleInfo(LastPlayed.track, time, Modifier.width(infoWidth))
+                        } else {
+                            TrackInfo(
+                                nowPlaying = nowPlaying,
+                                accent = accent,
+                                modifier = Modifier.width(infoWidth),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -336,7 +353,7 @@ private fun withDimSuffix(parts: SplitTitle, color: Color): AnnotatedString = bu
 }
 
 @Composable
-fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
+fun VinylDisc(nowPlaying: NowPlaying?, idle: Boolean, time: LocalDateTime, modifier: Modifier = Modifier) {
     val playing = nowPlaying?.isPlaying == true
     val speed = animateFloatAsState(
         targetValue = if (playing) 1f else 0f,
@@ -344,7 +361,7 @@ fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         label = "speed",
     )
     val dim = animateFloatAsState(
-        targetValue = if (nowPlaying == null) 0.4f else 1f,
+        targetValue = if (idle) 0.6f else 1f,
         animationSpec = tween(1200),
         label = "dim",
     )
@@ -398,6 +415,8 @@ fun VinylDisc(nowPlaying: NowPlaying?, modifier: Modifier = Modifier) {
         Canvas(Modifier.fillMaxSize()) {
             drawImage(sheen, alpha = dim.value)
         }
+        IdleClockOverlay(visible = idle, time = time, discSizePx = sizePx)
+        Tonearm(nowPlaying = nowPlaying.takeUnless { idle }, discSizePx = sizePx)
     }
 }
 
