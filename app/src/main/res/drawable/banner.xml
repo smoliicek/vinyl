@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#FF14110F" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#FF3A1F14" android:pathData="M0,0h320v180h-320z" android:fillAlpha="0.55" />
+    <!-- disc -->
+    <path android:fillColor="#FF0A0A0A" android:pathData="M90,90m-74,0a74,74 0,1 1,148 0a74,74 0,1 1,-148 0" />
+    <path android:strokeColor="#22FFFFFF" android:strokeWidth="1" android:pathData="M90,90m-64,0a64,64 0,1 1,128 0a64,64 0,1 1,-128 0" />
+    <path android:strokeColor="#1AFFFFFF" android:strokeWidth="1" android:pathData="M90,90m-54,0a54,54 0,1 1,108 0a54,54 0,1 1,-108 0" />
+    <path android:strokeColor="#22FFFFFF" android:strokeWidth="1" android:pathData="M90,90m-44,0a44,44 0,1 1,88 0a44,44 0,1 1,-88 0" />
+    <path android:fillColor="#FFE0623A" android:pathData="M90,90m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0" />
+    <path android:fillColor="#FF14110F" android:pathData="M90,90m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <!-- wordmark bars -->
+    <path android:fillColor="#FFF2EDE6" android:pathData="M190,78h96v10h-96z" />
+    <path android:fillColor="#88F2EDE6" android:pathData="M190,96h64v6h-64z" />
+</vector>
