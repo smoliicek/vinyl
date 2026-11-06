@@ -11,17 +11,24 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
+import androidx.tv.material3.Text
 
+/** On TV the grants go over adb; elsewhere [onOpenSettings] opens the system notification access screen. */
 @Composable
-fun PermissionScreen() {
+fun PermissionScreen(tv: Boolean, onOpenSettings: () -> Unit) {
     val ink = Color(0xFFF2EDE6)
     Box(
         modifier = Modifier
@@ -36,6 +43,20 @@ fun PermissionScreen() {
                 style = TextStyle(color = ink, fontSize = 34.sp, fontWeight = FontWeight.SemiBold),
             )
             Spacer(Modifier.height(12.dp))
+            if (!tv) {
+                BasicText(
+                    "Vinyl reads the playing track from media notifications. Turn on notification access " +
+                        "for Vinyl, then come back here.",
+                    style = TextStyle(color = ink.copy(alpha = 0.65f), fontSize = 20.sp, lineHeight = 28.sp),
+                )
+                Spacer(Modifier.height(28.dp))
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                Button(onClick = onOpenSettings, modifier = Modifier.focusRequester(focus)) {
+                    Text("Open notification access")
+                }
+                return@Column
+            }
             BasicText(
                 "Android TV has no settings screen for notification access, so grant it over adb. " +
                     "This screen switches to the record as soon as access is granted.",

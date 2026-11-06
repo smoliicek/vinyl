@@ -3,12 +3,15 @@ package com.smoliicek.vinyl
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -32,7 +35,12 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
@@ -55,6 +63,16 @@ class MainActivity : ComponentActivity() {
         readDebugText(intent)
         // Compose covers the whole window, so the theme's black background would only be overdraw.
         window.setBackgroundDrawable(null)
+        val tv = isTv()
+        if (!tv) {
+            // On a tablet the app is meant to sit on a stand as a now-playing display. Not on TV,
+            // where keeping the screen on would also keep the screensaver from starting.
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -69,18 +87,19 @@ class MainActivity : ComponentActivity() {
                 when {
                     showSettings -> SettingsScreen(
                         setup = setup,
+                        tv = tv,
                         onStartScreensaver = {
                             if (!setup.startScreensaverNow()) {
-                                Toast.makeText(this, "Screensaver can't be started on this TV", Toast.LENGTH_LONG).show()
+                                Toast.makeText(this, "Screensaver can't be started on this device", Toast.LENGTH_LONG).show()
                                 showSettings = false
                             }
                         },
                     )
                     else -> {
                         var buttonVisible by remember { mutableStateOf(true) }
-                        var lastKeyPress by remember { mutableIntStateOf(0) }
+                        var lastInput by remember { mutableIntStateOf(0) }
                         var swallowKeyUp by remember { mutableStateOf(false) }
-                        LaunchedEffect(lastKeyPress) {
+                        LaunchedEffect(lastInput) {
                             buttonVisible = true
                             delay(BUTTON_HIDE_DELAY_MS)
                             buttonVisible = false
@@ -88,13 +107,19 @@ class MainActivity : ComponentActivity() {
                         Box(
                             Modifier
                                 .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                        lastInput++
+                                    }
+                                }
                                 .onPreviewKeyEvent { event ->
                                     when (event.type) {
                                         KeyEventType.KeyDown -> {
                                             // While hidden, a navigation key only brings the button back.
                                             // Other keys (play/pause, volume) always pass through.
                                             swallowKeyUp = !buttonVisible && event.key in NAVIGATION_KEYS
-                                            lastKeyPress++
+                                            lastInput++
                                             swallowKeyUp
                                         }
                                         KeyEventType.KeyUp -> swallowKeyUp.also { swallowKeyUp = false }
@@ -102,7 +127,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                         ) {
-                            if (permissionMissing) PermissionScreen() else VinylScreen(nowPlaying)
+                            if (permissionMissing) PermissionScreen(tv, onOpenSettings = setup::openListenerSettings) else VinylScreen(nowPlaying)
                             SettingsButton(
                                 visible = buttonVisible,
                                 onClick = { showSettings = true },
@@ -151,7 +176,7 @@ private val NAVIGATION_KEYS = setOf(
 
 /**
  * Takes focus so a single OK press opens settings, stays faint, and fades out entirely
- * when no key has been pressed for a while.
+ * when there has been no key press or tap for a while.
  */
 @Composable
 private fun SettingsButton(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -170,6 +195,10 @@ private fun SettingsButton(visible: Boolean, onClick: () -> Unit, modifier: Modi
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
+            // A tap while hidden only brings the button back, like a navigation key.
+            .pointerInput(visible) {
+                if (!visible) awaitEachGesture { awaitFirstDown(pass = PointerEventPass.Initial).consume() }
+            }
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused }
             // ModulateAlpha applies alpha per draw call; plain .alpha() would render the button offscreen.

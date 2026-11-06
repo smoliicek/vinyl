@@ -1,11 +1,13 @@
 package com.smoliicek.vinyl
 
 import android.Manifest
+import android.app.UiModeManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.provider.Settings
 import android.util.Log
 
@@ -26,6 +28,10 @@ const val LISTENER_COMPONENT = "com.smoliicek.vinyl/com.smoliicek.vinyl.NowPlayi
 const val GRANT_LISTENER_COMMAND = "adb shell cmd notification allow_listener $LISTENER_COMPONENT"
 const val GRANT_SECURE_SETTINGS_COMMAND =
     "adb shell pm grant com.smoliicek.vinyl android.permission.WRITE_SECURE_SETTINGS"
+
+/** TVs get the D-pad and adb flow; everything else (tablets) gets touch and the system settings screens. */
+fun Context.isTv(): Boolean =
+    getSystemService(UiModeManager::class.java)?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
 
 /** Reads and writes the system screensaver selection. Every write is guarded; nothing here throws. */
 class SystemSetup(context: Context) {
@@ -72,6 +78,20 @@ class SystemSetup(context: Context) {
         }
         Settings.Secure.putString(resolver, KEY_COMPONENTS, prefs.getString(PREF_PREVIOUS, null))
         prefs.edit().remove(PREF_PREVIOUS).remove(PREF_HAS_PREVIOUS).apply()
+    }
+
+    /** Opens the system notification access screen. Returns false where there is none (Android TV). */
+    fun openListenerSettings(): Boolean = openSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+
+    /** Opens the system screensaver picker, for devices where we can't write the setting ourselves. */
+    fun openScreensaverSettings(): Boolean = openSettings(Settings.ACTION_DREAM_SETTINGS)
+
+    private fun openSettings(action: String): Boolean = try {
+        app.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (e: ActivityNotFoundException) {
+        Log.w(TAG, "No settings screen for $action", e)
+        false
     }
 
     /** Asks SystemUI to start the configured dream right now. Returns false if this firmware won't. */

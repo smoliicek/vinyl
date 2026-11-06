@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.tv.material3.Button
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
@@ -38,8 +39,12 @@ import androidx.tv.material3.Text
 private val Ok = Color(0xFF8FD19E)
 private val Missing = Color(0xFFE8A06A)
 
+/**
+ * On TV the screensaver is switched directly (secure settings granted over adb). Elsewhere the
+ * system screens handle both the screensaver choice and notification access.
+ */
 @Composable
-fun SettingsScreen(setup: SystemSetup, onStartScreensaver: () -> Unit) {
+fun SettingsScreen(setup: SystemSetup, tv: Boolean, onStartScreensaver: () -> Unit) {
     var isOurs by remember { mutableStateOf(false) }
     var listenerGranted by remember { mutableStateOf(false) }
     var canWrite by remember { mutableStateOf(false) }
@@ -73,11 +78,24 @@ fun SettingsScreen(setup: SystemSetup, onStartScreensaver: () -> Unit) {
                 ListItem(
                     selected = false,
                     onClick = {
-                        writeRefused = !setup.setOurScreensaver(!isOurs)
-                        refresh()
+                        if (tv) {
+                            writeRefused = !setup.setOurScreensaver(!isOurs)
+                            refresh()
+                        } else {
+                            // Refreshed by LifecycleResumeEffect when the user comes back.
+                            setup.openScreensaverSettings()
+                        }
                     },
                     headlineContent = { Text("Use as screensaver") },
-                    supportingContent = { Text(if (isOurs) "Vinyl is the screensaver" else "Another screensaver is set") },
+                    supportingContent = {
+                        Text(
+                            when {
+                                isOurs -> "Vinyl is the screensaver"
+                                tv -> "Another screensaver is set"
+                                else -> "Choose Vinyl in system screensaver settings"
+                            },
+                        )
+                    },
                     trailingContent = { Switch(checked = isOurs, onCheckedChange = null) },
                     modifier = Modifier.focusRequester(firstItem),
                 )
@@ -100,8 +118,14 @@ fun SettingsScreen(setup: SystemSetup, onStartScreensaver: () -> Unit) {
 
             Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 Spacer(Modifier.height(48.dp))
-                StatusRow("Notification access", listenerGranted, GRANT_LISTENER_COMMAND)
-                StatusRow("Secure settings access", canWrite, GRANT_SECURE_SETTINGS_COMMAND)
+                if (tv) {
+                    StatusRow("Notification access", listenerGranted) { Command(GRANT_LISTENER_COMMAND) }
+                    StatusRow("Secure settings access", canWrite) { Command(GRANT_SECURE_SETTINGS_COMMAND) }
+                } else {
+                    StatusRow("Notification access", listenerGranted) {
+                        Button(onClick = { setup.openListenerSettings() }) { Text("Open settings") }
+                    }
+                }
             }
         }
         }
@@ -109,7 +133,7 @@ fun SettingsScreen(setup: SystemSetup, onStartScreensaver: () -> Unit) {
 }
 
 @Composable
-private fun StatusRow(label: String, granted: Boolean, command: String) {
+private fun StatusRow(label: String, granted: Boolean, fix: @Composable () -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -125,16 +149,21 @@ private fun StatusRow(label: String, granted: Boolean, command: String) {
         }
         if (!granted) {
             Spacer(Modifier.height(10.dp))
-            Text(
-                command,
-                color = Color(0xFFE8C9A0),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                modifier = Modifier
-                    .background(Color(0xFF1C1916), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-            )
+            fix()
         }
     }
+}
+
+@Composable
+private fun Command(command: String) {
+    Text(
+        command,
+        color = Color(0xFFE8C9A0),
+        fontFamily = FontFamily.Monospace,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+        modifier = Modifier
+            .background(Color(0xFF1C1916), RoundedCornerShape(10.dp))
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+    )
 }

@@ -79,6 +79,15 @@ adb shell settings put secure screensaver_components com.smoliicek.vinyl/com.smo
 adb shell settings put secure screensaver_enabled 1
 ```
 
+### Tablet
+
+The same APK runs on an Android tablet, in landscape. It detects that it isn't on a TV and switches to touch:
+
+- Install it (`adb install` or open the APK on the tablet). There's no adb setup to do.
+- On first launch, tap **Open notification access** and turn Vinyl on.
+- In the app, a tap brings the Settings button back. The system bars stay hidden and the screen stays on, so it works as a now-playing display on a stand.
+- **Use as screensaver** opens the system screensaver settings, where you pick Vinyl. Tablets only start a screensaver while charging or docked, as set under "When to start".
+
 ## Testing the screensaver
 
 On most Android builds this starts the screensaver right away:
